@@ -28,7 +28,7 @@ parser.add_argument('--outl', default='Losses', help='folder to save Losses')
 parser.add_argument('--outm', default='Models', help='folder to save models')
 
 parser.add_argument('--workers', type=int, default=8, help='number of data loading workers')
-parser.add_argument('--batchSizes', type=list, default=[16, 16, 16, 16], help='list of batch sizes during the training')
+parser.add_argument('--batchSizes', type=list, default=[16, 16, 16, 16, 16], help='list of batch sizes during the training')
 parser.add_argument('--nch', type=int, default=4, help='base number of channel for networks')
 parser.add_argument('--BN', action='store_true', help='use BatchNorm in G and D')
 parser.add_argument('--WS', action='store_true', help='use WeightScale in G and D')
@@ -50,6 +50,7 @@ DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 MAX_RES = 3 # for 32x32 output
 
 transform = transforms.Compose([
+    transforms.Resize(64),
     # resize to 32x32
     transforms.Pad((2, 2)),
     transforms.ToTensor(),
