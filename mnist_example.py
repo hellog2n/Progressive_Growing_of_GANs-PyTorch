@@ -52,7 +52,6 @@ MAX_RES = 3 # for 32x32 output
 transform = transforms.Compose([
     transforms.Resize(64),
     # resize to 32x32
-    transforms.Pad((2, 2)),
     transforms.ToTensor(),
     transforms.Normalize((0.5,), (0.5,))
 ])
