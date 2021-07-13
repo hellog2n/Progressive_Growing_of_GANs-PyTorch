@@ -230,8 +230,13 @@ while True:
                     fake_images = F.upsample(fake_images, 4 * 2 ** MAX_RES)
         save_image(fake_images,
                    os.path.join(opt.outd, opt.outf, f'fake_images-{epoch:04d}-p{P.p:.2f}.png'),
-                   # nrow=8, pad_value=0,
+                    nrow=8, pad_value=0,
                    normalize=True, range=(-1, 1))
+        if epoch == 7:
+            for num in range(len(fake_images)):
+                save_image(fake_images,
+                       os.path.join(opt.outd, opt.outf, f'fake_image{num}.png'),
+                       normalize=True, range=(-1, 1))
 
     if P.p >= P.pmax and not epoch % opt.savemodel:
         torch.save(G, os.path.join(opt.outd, opt.outm, f'G_nch-{opt.nch}_epoch-{epoch}.pth'))
