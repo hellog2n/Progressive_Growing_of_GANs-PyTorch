@@ -24,12 +24,15 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--data', type=str, default='DATA', help='directory containing the data')
 parser.add_argument('--outd', default='Results', help='directory to save results')
 parser.add_argument('--outf', default='Images', help='folder to save synthetic images')
+parser.add_argument('--evalDir', type=str, default='EvalDir', help='folder to save Generated images')
+parser.add_argument('--pggan', type=str, default='PGGAN', help='folder to save Generated images-PGGAN')
 parser.add_argument('--outl', default='Losses', help='folder to save Losses')
 parser.add_argument('--outm', default='Models', help='folder to save models')
 
 parser.add_argument('--workers', type=int, default=8, help='number of data loading workers')
 parser.add_argument('--batchSizes', type=list, default=[16, 16, 16, 16, 16], help='list of batch sizes during the training')
 parser.add_argument('--nch', type=int, default=4, help='base number of channel for networks')
+parser.add_argument('--finishEpoch', type=int, default=7, help='number of Epoch Finishing Training')
 parser.add_argument('--BN', action='store_true', help='use BatchNorm in G and D')
 parser.add_argument('--WS', action='store_true', help='use WeightScale in G and D')
 parser.add_argument('--PN', action='store_true', help='use PixelNorm in G')
@@ -39,7 +42,7 @@ parser.add_argument('--lambdaGP', type=float, default=10, help='lambda for gradi
 parser.add_argument('--gamma', type=float, default=1, help='gamma for gradient penalty')
 parser.add_argument('--e_drift', type=float, default=0.001, help='epsilon drift for discriminator loss')
 parser.add_argument('--saveimages', type=int, default=1, help='number of epochs between saving image examples')
-parser.add_argument('--savenum', type=int, default=64, help='number of examples images to save')
+parser.add_argument('--savenum', type=int, default=256, help='number of examples images to save')
 parser.add_argument('--savemodel', type=int, default=10, help='number of epochs between saving models')
 parser.add_argument('--savemaxsize', action='store_true', help='save sample images at max resolution instead of real resolution')
 
@@ -49,12 +52,20 @@ print(opt)
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 MAX_RES = 4 # for 32x32 output - 3 / 64x64 output - 4
 
-transform = transforms.Compose([
-    transforms.Resize(64),
-    # resize to 32x32
-    transforms.ToTensor(),
-    transforms.Normalize((0.5,), (0.5,))
-])
+if MAX_RES == 3:
+    transform = transforms.Compose([
+        transforms.Resize(32),
+        # resize to 32x32
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,), (0.5,))
+    ])
+elif MAX_RES == 4:
+    transform = transforms.Compose([
+        transforms.Resize(64),
+        # resize to 64x64
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,), (0.5,))
+    ])
 
 dataset = MNIST(opt.data, download=True, train=True, transform=transform)
 
@@ -221,7 +232,7 @@ while True:
 
         # Save sampled images with Gs
         Gs.eval()
-        # z = hypersphere(torch.randn(opt.savenum, opt.nch * 32, 1, 1, device=DEVICE))
+        #z_evalsave = hypersphere(torch.randn(opt.savenum, opt.nch * 32, 1, 1, device=DEVICE))
 
         with torch.no_grad():
             fake_images = Gs(z_save, P.p)
@@ -232,11 +243,17 @@ while True:
                    os.path.join(opt.outd, opt.outf, f'fake_images-{epoch:04d}-p{P.p:.2f}.png'),
                     nrow=8, pad_value=0,
                    normalize=True, range=(-1, 1))
-        if epoch == 7:
-            for num in range(len(fake_images)):
-                save_image(fake_images[num],
-                       os.path.join(opt.outd, opt.outf, f'fake_image{num}.png'),
-                       normalize=True, range=(-1, 1))
+
+        # 평가용 이미지 생성
+        with torch.no_grad():
+            if epoch == opt.finishEpoch :
+                for i in range(10):
+                    z_evalsave = hypersphere(torch.randn(opt.savenum, opt.nch * 32, 1, 1, device=DEVICE))
+                    fake_images = Gs(z_evalsave, P.p)
+                    for num in range(len(fake_images)):
+                        save_image(fake_images[num],
+                        os.path.join(opt.evalDir, opt.pggan, f'fake_image{num}.png'),
+                        normalize=True)
 
     if P.p >= P.pmax and not epoch % opt.savemodel:
         torch.save(G, os.path.join(opt.outd, opt.outm, f'G_nch-{opt.nch}_epoch-{epoch}.pth'))
