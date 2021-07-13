@@ -47,7 +47,7 @@ opt = parser.parse_args()
 print(opt)
 
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-MAX_RES = 3 # for 32x32 output
+MAX_RES = 4 # for 32x32 output - 3 / 64x64 output - 4
 
 transform = transforms.Compose([
     transforms.Resize(64),
@@ -230,7 +230,7 @@ while True:
                     fake_images = F.upsample(fake_images, 4 * 2 ** MAX_RES)
         save_image(fake_images,
                    os.path.join(opt.outd, opt.outf, f'fake_images-{epoch:04d}-p{P.p:.2f}.png'),
-                   nrow=8, pad_value=0,
+                   # nrow=8, pad_value=0,
                    normalize=True, range=(-1, 1))
 
     if P.p >= P.pmax and not epoch % opt.savemodel:
