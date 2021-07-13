@@ -234,7 +234,7 @@ while True:
                    normalize=True, range=(-1, 1))
         if epoch == 7:
             for num in range(len(fake_images)):
-                save_image(fake_images,
+                save_image(fake_images[num],
                        os.path.join(opt.outd, opt.outf, f'fake_image{num}.png'),
                        normalize=True, range=(-1, 1))
 
