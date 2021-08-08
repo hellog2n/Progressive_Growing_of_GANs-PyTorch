@@ -50,7 +50,7 @@ opt = parser.parse_args()
 print(opt)
 
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-MAX_RES = 4 # for 32x32 output - 3 / 64x64 output - 4
+MAX_RES = 4 # for 32x32 output - 3 / 64x64 output - 4 / 128x128 output - 5
 
 if MAX_RES == 3:
     transform = transforms.Compose([
@@ -62,6 +62,13 @@ if MAX_RES == 3:
 elif MAX_RES == 4:
     transform = transforms.Compose([
         transforms.Resize(64),
+        # resize to 64x64
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,), (0.5,))
+    ])
+elif MAX_RES == 5:
+    transform = transforms.Compose([
+        transforms.Resize(128),
         # resize to 64x64
         transforms.ToTensor(),
         transforms.Normalize((0.5,), (0.5,))
@@ -252,7 +259,7 @@ while True:
                     fake_images = Gs(z_evalsave, P.p)
                     for num in range(len(fake_images)):
                         save_image(fake_images[num],
-                        os.path.join(opt.evalDir, opt.pggan, f'fake_image{num}.png'),
+                        os.path.join(opt.evalDir, opt.pggan, f'fake_image_{i}_{num}.png'),
                         normalize=True)
 
     if P.p >= P.pmax and not epoch % opt.savemodel:
