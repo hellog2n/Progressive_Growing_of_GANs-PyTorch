@@ -49,10 +49,12 @@ parser.add_argument('--savemaxsize', action='store_true', help='save sample imag
 opt = parser.parse_args()
 print(opt)
 
+
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 MAX_RES = 4 # for 32x32 output - 3 / 64x64 output - 4 / 128x128 output - 5
-
+image_size = 0
 if MAX_RES == 3:
+    image_size  = 32
     transform = transforms.Compose([
         transforms.Resize(32),
         # resize to 32x32
@@ -60,6 +62,7 @@ if MAX_RES == 3:
         transforms.Normalize((0.5,), (0.5,))
     ])
 elif MAX_RES == 4:
+    image_size  = 64
     transform = transforms.Compose([
         transforms.Resize(64),
         # resize to 64x64
@@ -67,6 +70,7 @@ elif MAX_RES == 4:
         transforms.Normalize((0.5,), (0.5,))
     ])
 elif MAX_RES == 5:
+    image_size  = 128
     transform = transforms.Compose([
         transforms.Resize(128),
         # resize to 64x64
@@ -74,7 +78,25 @@ elif MAX_RES == 5:
         transforms.Normalize((0.5,), (0.5,))
     ])
 
-dataset = MNIST(opt.data, download=True, train=True, transform=transform)
+from torchvision import datasets
+
+transform = transforms.Compose(
+    [
+     transforms.Grayscale(num_output_channels=1),
+     transforms.ToTensor(),
+     transforms.Resize((image_size, image_size)),
+     transforms.Normalize((0.5, ), (0.5, ))
+])
+
+
+
+dataset = datasets.ImageFolder(root = opt.data,
+                transform = transform)
+
+
+
+# dataset = MNIST(opt.data, download=True, train=True, transform=transform)
+
 
 # creating output folders
 if not os.path.exists(opt.outd):
@@ -254,7 +276,7 @@ while True:
         # 평가용 이미지 생성
         with torch.no_grad():
             if epoch == opt.finishEpoch :
-                for i in range(10):
+                for i in range(3):
                     z_evalsave = hypersphere(torch.randn(opt.savenum, opt.nch * 32, 1, 1, device=DEVICE))
                     fake_images = Gs(z_evalsave, P.p)
                     for num in range(len(fake_images)):
