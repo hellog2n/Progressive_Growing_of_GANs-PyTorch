@@ -139,6 +139,8 @@ data_loader = DataLoader(dataset,
                          drop_last=True,
                          pin_memory=True)
 
+checkingLoss_D = []
+checkingLoss_G = []
 while True:
     t0 = time()
 
@@ -204,6 +206,7 @@ while True:
         lossEpochD.append(d_loss.item())
         lossEpochD_W.append(d_loss_W.item())
 
+
         # =============== Train the generator ===============#
 
         G.zero_grad()
@@ -232,7 +235,8 @@ while True:
                                 f', d_loss_W: {d_loss_W.item():.3f}'
                                 f', GP: {gradient_penalty.item():.3f}'
                                 f', progress: {P.p:.2f}')
-
+        checkingLoss_G.append(lossEpochD)
+        checkingLoss_D.append(lossEpochG)
     printProgressBar(total, total,
                      done=f'Epoch [{epoch:>3d}]  d_loss: {np.mean(lossEpochD):.4f}'
                           f', d_loss_W: {np.mean(lossEpochD_W):.3f}'
@@ -248,6 +252,18 @@ while True:
     np.save(os.path.join(opt.outd, opt.outl, 'g_losses.npy'), g_losses)
 
     cudnn.benchmark = False
+
+    # epoch = 30 ngf = 64 size= 64
+    plt.figure(figsize=(10, 5))
+    plt.title("Generator and Discriminator Loss During Training")
+    plt.plot(checkingLoss_G, label="G")
+    plt.plot(checkingLoss_D, label="D")
+    plt.xlabel("iterations")
+    plt.ylabel("Loss")
+    plt.legend()
+    plt.savefig(os.path.join(opt.outd, opt.outl, f'Gen Dis Loss Epoch_{epoch}.png'), dpi=200, bbox_inches='tight')
+    plt.clf()
+
     if not (epoch + 1) % opt.saveimages:
         # plotting loss values, g_losses is not plotted as it does not represent anything in the WGAN-GP
         ax = plt.subplot()
