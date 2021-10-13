@@ -17,12 +17,13 @@ from torchvision.datasets import MNIST
 from model import *
 from progressBar import printProgressBar
 from utils import *
+from mmdLoss import MMD_loss
 
 from time import time
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--data', type=str, default='DATA', help='directory containing the data')
-parser.add_argument('--outd', default='Results', help='directory to save results')
+parser.add_argument('--data', type=str, default='dataset/CT', help='directory containing the data')
+parser.add_argument('--outd', default='Results256', help='directory to save results')
 parser.add_argument('--outf', default='Images', help='folder to save synthetic images')
 parser.add_argument('--evalDir', type=str, default='EvalDir', help='folder to save Generated images')
 parser.add_argument('--pggan', type=str, default='PGGAN', help='folder to save Generated images-PGGAN')
@@ -30,7 +31,7 @@ parser.add_argument('--outl', default='Losses', help='folder to save Losses')
 parser.add_argument('--outm', default='Models', help='folder to save models')
 
 parser.add_argument('--workers', type=int, default=8, help='number of data loading workers')
-parser.add_argument('--batchSizes', type=list, default=[16, 16, 16, 16, 16], help='list of batch sizes during the training')
+parser.add_argument('--batchSizes', type=list, default=[16, 16, 16, 16, 16, 16, 14], help='list of batch sizes during the training')
 parser.add_argument('--nch', type=int, default=4, help='base number of channel for networks')
 parser.add_argument('--finishEpoch', type=int, default=7, help='number of Epoch Finishing Training')
 parser.add_argument('--BN', action='store_true', help='use BatchNorm in G and D')
@@ -42,7 +43,7 @@ parser.add_argument('--lambdaGP', type=float, default=10, help='lambda for gradi
 parser.add_argument('--gamma', type=float, default=1, help='gamma for gradient penalty')
 parser.add_argument('--e_drift', type=float, default=0.001, help='epsilon drift for discriminator loss')
 parser.add_argument('--saveimages', type=int, default=1, help='number of epochs between saving image examples')
-parser.add_argument('--savenum', type=int, default=256, help='number of examples images to save')
+parser.add_argument('--savenum', type=int, default=64, help='number of examples images to save')
 parser.add_argument('--savemodel', type=int, default=10, help='number of epochs between saving models')
 parser.add_argument('--savemaxsize', action='store_true', help='save sample images at max resolution instead of real resolution')
 
@@ -51,32 +52,10 @@ print(opt)
 
 
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-MAX_RES = 4 # for 32x32 output - 3 / 64x64 output - 4 / 128x128 output - 5
+MAX_RES = 6 # for 32x32 output - 3 / 64x64 output - 4 / 128x128 output - 5
 image_size = 0
-if MAX_RES == 3:
-    image_size  = 32
-    transform = transforms.Compose([
-        transforms.Resize(32),
-        # resize to 32x32
-        transforms.ToTensor(),
-        transforms.Normalize((0.5,), (0.5,))
-    ])
-elif MAX_RES == 4:
-    image_size  = 64
-    transform = transforms.Compose([
-        transforms.Resize(64),
-        # resize to 64x64
-        transforms.ToTensor(),
-        transforms.Normalize((0.5,), (0.5,))
-    ])
-elif MAX_RES == 5:
-    image_size  = 128
-    transform = transforms.Compose([
-        transforms.Resize(128),
-        # resize to 64x64
-        transforms.ToTensor(),
-        transforms.Normalize((0.5,), (0.5,))
-    ])
+image_size  = 2**(2+MAX_RES)
+
 
 from torchvision import datasets
 
@@ -108,6 +87,7 @@ for f in [opt.outf, opt.outl, opt.outm]:
 # Model creation and init
 G = Generator(max_res=MAX_RES, nch=opt.nch, nc=1, bn=opt.BN, ws=opt.WS, pn=opt.PN).to(DEVICE)
 D = Discriminator(max_res=MAX_RES, nch=opt.nch, nc=1, bn=opt.BN, ws=opt.WS).to(DEVICE)
+mmd_loss = MMD_loss().to(DEVICE)
 if not opt.WS:
     # weights are initialized by WScale layers to normal if WS is used
     G.apply(weights_init)
@@ -125,6 +105,7 @@ total = 2
 d_losses = np.array([])
 d_losses_W = np.array([])
 g_losses = np.array([])
+mmdL = []
 P = Progress(opt.n_iter, MAX_RES, opt.batchSizes)
 
 z_save = hypersphere(torch.randn(opt.savenum, opt.nch * 32, 1, 1, device=DEVICE))
@@ -138,7 +119,7 @@ data_loader = DataLoader(dataset,
                          num_workers=opt.workers,
                          drop_last=True,
                          pin_memory=True)
-
+dataarr=[]
 checkingLoss_D = []
 checkingLoss_G = []
 while True:
@@ -225,6 +206,12 @@ while True:
 
         lossEpochG.append(g_loss.item())
 
+        # Checking the MMD Loss
+        dataarr = torch.Tensor(images[0][:64]).to(DEVICE)
+        fakearr = fake_images[:64]
+        mmd = mmd_loss(fakearr, dataarr)
+        mmdL.append(mmd.item())
+
         # update Gs with exponential moving average
         exp_mov_avg(Gs, G, alpha=0.999, global_step=global_step)
 
@@ -235,8 +222,8 @@ while True:
                                 f', d_loss_W: {d_loss_W.item():.3f}'
                                 f', GP: {gradient_penalty.item():.3f}'
                                 f', progress: {P.p:.2f}')
-        checkingLoss_G.append(lossEpochD)
-        checkingLoss_D.append(lossEpochG)
+        checkingLoss_G.append(d_loss.item())
+        checkingLoss_D.append(g_loss.item())
     printProgressBar(total, total,
                      done=f'Epoch [{epoch:>3d}]  d_loss: {np.mean(lossEpochD):.4f}'
                           f', d_loss_W: {np.mean(lossEpochD_W):.3f}'
@@ -289,16 +276,6 @@ while True:
                     nrow=8, pad_value=0,
                    normalize=True, range=(-1, 1))
 
-        # 평가용 이미지 생성
-        with torch.no_grad():
-            if epoch == opt.finishEpoch :
-                for i in range(3):
-                    z_evalsave = hypersphere(torch.randn(opt.savenum, opt.nch * 32, 1, 1, device=DEVICE))
-                    fake_images = Gs(z_evalsave, P.p)
-                    for num in range(len(fake_images)):
-                        save_image(fake_images[num],
-                        os.path.join(opt.evalDir, opt.pggan, f'fake_image_{i}_{num}.png'),
-                        normalize=True)
 
     if P.p >= P.pmax and not epoch % opt.savemodel:
         torch.save(G, os.path.join(opt.outd, opt.outm, f'G_nch-{opt.nch}_epoch-{epoch}.pth'))
@@ -306,3 +283,4 @@ while True:
         torch.save(Gs, os.path.join(opt.outd, opt.outm, f'Gs_nch-{opt.nch}_epoch-{epoch}.pth'))
 
     epoch += 1
+
