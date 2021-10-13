@@ -23,7 +23,7 @@ from time import time
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data', type=str, default='dataset/CT', help='directory containing the data')
-parser.add_argument('--outd', default='Results256', help='directory to save results')
+parser.add_argument('--outd', default='Results', help='directory to save results')
 parser.add_argument('--outf', default='Images', help='folder to save synthetic images')
 parser.add_argument('--evalDir', type=str, default='EvalDir', help='folder to save Generated images')
 parser.add_argument('--pggan', type=str, default='PGGAN', help='folder to save Generated images-PGGAN')
@@ -31,7 +31,7 @@ parser.add_argument('--outl', default='Losses', help='folder to save Losses')
 parser.add_argument('--outm', default='Models', help='folder to save models')
 
 parser.add_argument('--workers', type=int, default=8, help='number of data loading workers')
-parser.add_argument('--batchSizes', type=list, default=[16, 16, 16, 16, 16, 16, 14], help='list of batch sizes during the training')
+parser.add_argument('--batchSizes', type=list, default=[16, 16, 16, 16], help='list of batch sizes during the training')
 parser.add_argument('--nch', type=int, default=4, help='base number of channel for networks')
 parser.add_argument('--finishEpoch', type=int, default=7, help='number of Epoch Finishing Training')
 parser.add_argument('--BN', action='store_true', help='use BatchNorm in G and D')
@@ -46,18 +46,18 @@ parser.add_argument('--saveimages', type=int, default=1, help='number of epochs 
 parser.add_argument('--savenum', type=int, default=64, help='number of examples images to save')
 parser.add_argument('--savemodel', type=int, default=10, help='number of epochs between saving models')
 parser.add_argument('--savemaxsize', action='store_true', help='save sample images at max resolution instead of real resolution')
-parser.add_argument('--folder_name', type=str, help='The name of the main folder')
+parser.add_argument('--size', type=int, default=4, help='The name of the main folder')
 
 opt = parser.parse_args()
 print(opt)
 
 
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-MAX_RES = 3 # for 32x32 output - 3 / 64x64 output - 4 / 128x128 output - 5
+MAX_RES = opt.size # for 32x32 output - 3 / 64x64 output - 4 / 128x128 output - 5
 image_size = 0
 image_size  = 2**(2+MAX_RES)
 
-Folder_Name = opt.folder_name
+
 from torchvision import datasets
 
 transform = transforms.Compose(
@@ -79,11 +79,11 @@ dataset = datasets.ImageFolder(root = opt.data,
 
 
 # creating output folders
-if not os.path.exists(os.path.join(Folder_Name, opt.outd)):
-    os.makedirs(os.path.join(Folder_Name, opt.outd))
-for f in [opt.outf, opt.outl, opt.outm]:
-    if not os.path.exists(os.path.join(Folder_Name, opt.outd, f)):
-        os.makedirs(os.path.join(Folder_Name, opt.outd, f))
+if not os.path.exists(os.path.join(opt.outd)):
+    os.makedirs(os.path.join(opt.outd))
+for f in [opt.outf, opt.outl, opt.outm, 'MMD_Loss']:
+    if not os.path.exists(os.path.join(opt.outd, f)):
+        os.makedirs(os.path.join(opt.outd, f))
 
 # Model creation and init
 G = Generator(max_res=MAX_RES, nch=opt.nch, nc=1, bn=opt.BN, ws=opt.WS, pn=opt.PN).to(DEVICE)
@@ -208,8 +208,8 @@ while True:
         lossEpochG.append(g_loss.item())
 
         # Checking the MMD Loss
-        dataarr = torch.Tensor(images[0][:16]).to(DEVICE)
-        fakearr = fake_images[:16]
+        dataarr = images.to(DEVICE)
+        fakearr = fake_images
         mmd = mmd_loss(fakearr, dataarr)
         mmdL.append(mmd.item())
 
@@ -237,9 +237,9 @@ while True:
     d_losses_W = np.append(d_losses_W, lossEpochD_W)
     g_losses = np.append(g_losses, lossEpochG)
 
-    np.save(os.path.join(Folder_Name, opt.outd, opt.outl, 'd_losses.npy'), d_losses)
-    np.save(os.path.join(Folder_Name, opt.outd, opt.outl, 'd_losses_W.npy'), d_losses_W)
-    np.save(os.path.join(Folder_Name, opt.outd, opt.outl, 'g_losses.npy'), g_losses)
+    np.save(os.path.join(opt.outd, opt.outl, 'd_losses.npy'), d_losses)
+    np.save(os.path.join( opt.outd, opt.outl, 'd_losses_W.npy'), d_losses_W)
+    np.save(os.path.join( opt.outd, opt.outl, 'g_losses.npy'), g_losses)
 
     cudnn.benchmark = False
 
@@ -251,7 +251,7 @@ while True:
     plt.xlabel("iterations")
     plt.ylabel("Loss")
     plt.legend()
-    plt.savefig(os.path.join(Folder_Name, opt.outd, opt.outl, f'Gen Dis Loss Epoch_{epoch}.png'), dpi=200, bbox_inches='tight')
+    plt.savefig(os.path.join(opt.outd, opt.outl, f'Gen Dis Loss Epoch_{epoch}.png'), dpi=200, bbox_inches='tight')
     plt.clf()
 
     if not (epoch + 1) % opt.saveimages:
@@ -262,7 +262,7 @@ while True:
         ax.set_xlabel('epoch')
         ax.set_ylabel('Loss')
         ax.set_title(f'Progress: {P.p:.2f}')
-        plt.savefig(os.path.join(Folder_Name, opt.outd, opt.outl, f'Epoch_{epoch}.png'), dpi=200, bbox_inches='tight')
+        plt.savefig(os.path.join( opt.outd, opt.outl, f'Epoch_{epoch}.png'), dpi=200, bbox_inches='tight')
         plt.clf()
 
         plt.figure(figsize=(10, 5))
@@ -271,7 +271,7 @@ while True:
         plt.xlabel("iterations")
         plt.ylabel("MMD Loss")
         plt.legend()
-        plt.savefig(os.path.join(Folder_Name, 'MMD_Loss', f'MMD Loss Epoch_{epoch}.png'), dpi=200, bbox_inches='tight')
+        plt.savefig(os.path.join( opt.outd, 'MMD_Loss', f'MMD Loss Epoch_{epoch}.png'), dpi=200, bbox_inches='tight')
         plt.clf()
 
         # Save sampled images with Gs
@@ -284,15 +284,15 @@ while True:
                 if fake_images.size(-1) != 4 * 2 ** MAX_RES:
                     fake_images = F.upsample(fake_images, 4 * 2 ** MAX_RES)
         save_image(fake_images,
-                   os.path.join(Folder_Name, opt.outd, opt.outf, f'fake_images-{epoch:04d}-p{P.p:.2f}.png'),
+                   os.path.join( opt.outd, opt.outf, f'fake_images-{epoch:04d}-p{P.p:.2f}.png'),
                     nrow=8, pad_value=0,
                    normalize=True, range=(-1, 1))
 
 
     if P.p >= P.pmax and not epoch % opt.savemodel:
-        torch.save(G, os.path.join(Folder_Name, opt.outd, opt.outm, f'G_nch-{opt.nch}_epoch-{epoch}.pth'))
-        torch.save(D, os.path.join(Folder_Name, opt.outd, opt.outm, f'D_nch-{opt.nch}_epoch-{epoch}.pth'))
-        torch.save(Gs, os.path.join(Folder_Name, opt.outd, opt.outm, f'Gs_nch-{opt.nch}_epoch-{epoch}.pth'))
+        torch.save(G, os.path.join( opt.outd, opt.outm, f'G_nch-{opt.nch}_epoch-{epoch}.pth'))
+        torch.save(D, os.path.join( opt.outd, opt.outm, f'D_nch-{opt.nch}_epoch-{epoch}.pth'))
+        torch.save(Gs, os.path.join( opt.outd, opt.outm, f'Gs_nch-{opt.nch}_epoch-{epoch}.pth'))
 
     epoch += 1
 
