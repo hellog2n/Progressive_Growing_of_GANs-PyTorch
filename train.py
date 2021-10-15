@@ -35,7 +35,7 @@ parser.add_argument('--outl', default='Losses', help='folder to save Losses')
 parser.add_argument('--outm', default='Models', help='folder to save models')
 
 parser.add_argument('--workers', type=int, default=8, help='number of data loading workers')
-parser.add_argument('--batchSizes', type=list, default=[16, 16, 16, 16], help='list of batch sizes during the training')
+parser.add_argument('--batchSizes', type=list, default=[16, 16, 16, 16, 16, 16], help='list of batch sizes during the training')
 parser.add_argument('--nch', type=int, default=4, help='base number of channel for networks')
 parser.add_argument('--saveImageGroup', type=list, default=[1000, 2560], help='number of Saving Image Groups')
 parser.add_argument('--seed', type=int, default=1212, help='number of the fixed random seed')
@@ -62,23 +62,24 @@ manualSeed = opt.seed   # default: 1212
 print("Random Seed: ", manualSeed, "...")
 random.seed(manualSeed)
 torch.manual_seed(manualSeed)
+
 torch.cuda.manual_seed(manualSeed)
 torch.cuda.manual_seed_all(manualSeed)  # if use multi-GPU
-cudnn.deterministic = True
-cudnn.benchmark = False
-np.random.seed(manualSeed)
-print("Check the Current Random Seed: ", torch.seed(), "...")
 
+'''cudnn.deterministic = True
+cudnn.benchmark = False'''
+np.random.seed(manualSeed)
+
+print("Check the Current Random Torch.Seed: ", torch.seed(), "...")
+print("Check the Current Random Torch.initial_Seed: ", torch.initial_seed(), "...")
+print("Check the Current Random Cuda.Seed: ", torch.cuda.initial_seed(), "...")
 
 
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 MAX_RES = opt.size # for 32x32 output - 3 / 64x64 output - 4 / 128x128 output - 5
 image_size  = 2**(2+MAX_RES)
 
-z1 = hypersphere(torch.randn(10, opt.nch * 32, 1, 1, device=DEVICE))
-z2 = hypersphere(torch.randn(10, opt.nch * 32, 1, 1, device=DEVICE))
-print('The z1 is ', z1)
-print('The z2 is ', z2)
+
 
 
 from torchvision import datasets
@@ -107,9 +108,11 @@ if not os.path.exists(os.path.join(opt.outd)):
 for f in [opt.outf, opt.outl, opt.outm, 'MMD_Loss']:
     if not os.path.exists(os.path.join(opt.outd, f)):
         os.makedirs(os.path.join(opt.outd, f))
-for i in ['Normalized-[-1,1]', 'Normalized-[0,1]']:
-    if not os.path.exists(os.path.join(opt.outf, i)):
-        os.makedirs(os.path.join(opt.outf, i))
+for i in opt.saveImageGroup:
+    if not os.path.exists(os.path.join(opt.outd, opt.outf, str(i))):
+        os.makedirs(os.path.join(opt.outd,opt.outf, str(i)))
+        os.makedirs(os.path.join(opt.outd,opt.outf,str(i), 'Normalized-[-1,1]'))
+        os.makedirs(os.path.join(opt.outd,opt.outf,str(i), 'Normalized-[0,1]'))
 
 # Model creation and init
 G = Generator(max_res=MAX_RES, nch=opt.nch, nc=1, bn=opt.BN, ws=opt.WS, pn=opt.PN).to(DEVICE)
@@ -157,7 +160,7 @@ while True:
     lossEpochD_W = []
 
     G.train()
-    # cudnn.benchmark = True
+    cudnn.benchmark = True
 
     P.progress(epoch, 1, total)
 
@@ -323,23 +326,24 @@ while True:
         torch.save(D, os.path.join( opt.outd, opt.outm, f'D_nch-{opt.nch}_epoch-{epoch}.pth'))
         torch.save(Gs, os.path.join( opt.outd, opt.outm, f'Gs_nch-{opt.nch}_epoch-{epoch}.pth'))
 
-    if (epoch > 100 and (epoch-100) % 20 == 0) or epoch == checkVal:
+    if (epoch > 100 and (epoch-100) % 20 == 0) or epoch == opt.checkVal:
         # 테스트  에폭마다 예시 이미지 생성
         with torch.no_grad():
             for num in opt.saveImageGroup:
-                z = hypersphere(torch.randn(num, opt.nch * 32, 1, 1, device=DEVICE))
+                z = hypersphere(torch.randn(64, opt.nch * 32, 1, 1, device=DEVICE))
                 fake_images = Gs(z, P.p)
                 for i, img in enumerate(fake_images):
                     # Normalize [0, 1]
                     save_image(img,
-                   os.path.join(opt.outd, opt.outf,  'Normalized-[0,1]', f'fake_images-{epoch:04d}-p{P.p:.2f}_{i}.png'),
+                   os.path.join(opt.outd, opt.outf, str(num), 'Normalized-[0,1]', f'fake_images-{epoch:04d}-p{P.p:.2f}_{i}.png'),
                    nrow=8, pad_value=0,
                    normalize=True)
                     # Normalize [-1, 1]
                     save_image(img,
-                   os.path.join(opt.outd, opt.outf, 'Normalized-[-1,1]', f'fake_images-{epoch:04d}-p{P.p:.2f}_{i}.png'),
+                   os.path.join(opt.outd, opt.outf,str(num), 'Normalized-[-1,1]', f'fake_images-{epoch:04d}-p{P.p:.2f}_{i}.png'),
                    nrow=8, pad_value=0,
                    normalize=False, range=(-1, 1))
+        print(f'Success the Saving Images! The number of ')
 
     epoch += 1
 
