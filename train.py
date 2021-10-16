@@ -155,8 +155,8 @@ dataarr=[]
 checkingLoss_D = []
 checkingLoss_G = []
 
-import time
-start = time.time()
+
+start = time()
 while True:
     t0 = time()
 
@@ -264,7 +264,7 @@ while True:
                      done=f'Epoch [{epoch:>3d}]  d_loss: {np.mean(lossEpochD):.4f}'
                           f', d_loss_W: {np.mean(lossEpochD_W):.3f}'
                           f', progress: {P.p:.2f}, time: {time() - t0:.2f}s'
-                            f', Mean MMD_Loss: {np.mean(mmditer.item())}'
+                            f', Mean MMD_Loss: {np.mean(mmditer)}'
                      )
 
     d_losses = np.append(d_losses, lossEpochD)
