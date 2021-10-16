@@ -31,13 +31,13 @@ parser.add_argument('--outd', default='Results', help='directory to save results
 parser.add_argument('--outf', default='Images', help='folder to save synthetic images')
 parser.add_argument('--evalDir', type=str, default='EvalDir', help='folder to save Generated images')
 parser.add_argument('--pggan', type=str, default='PGGAN', help='folder to save Generated images-PGGAN')
-parser.add_argument('--outl', default='Losses', help='folder to save Losses')
+parser.add_argument('--outl', default='D_Loss', help='folder to save Losses')
 parser.add_argument('--outm', default='Models', help='folder to save models')
 
-parser.add_argument('--workers', type=int, default=8, help='number of data loading workers')
-parser.add_argument('--batchSizes', type=list, default=[16, 16, 16, 16, 16, 16], help='list of batch sizes during the training')
+parser.add_argument('--workers', type=int, default=2, help='number of data loading workers')
+parser.add_argument('--batchSizes', type=list, default=[16, 16, 16, 16], help='list of batch sizes during the training')
 parser.add_argument('--nch', type=int, default=4, help='base number of channel for networks')
-parser.add_argument('--saveImageGroup', type=list, default=[1000, 2560], help='number of Saving Image Groups')
+parser.add_argument('--saveGroup', type=list, default=[1000, 2560], help='number of Saving Image Groups')
 parser.add_argument('--seed', type=int, default=1212, help='number of the fixed random seed')
 parser.add_argument('--BN', action='store_true', help='use BatchNorm in G and D')
 parser.add_argument('--WS', action='store_true', help='use WeightScale in G and D')
@@ -53,6 +53,7 @@ parser.add_argument('--savenum', type=int, default=64, help='number of examples 
 parser.add_argument('--savemodel', type=int, default=10, help='number of epochs between saving models')
 parser.add_argument('--savemaxsize', action='store_true', help='save sample images at max resolution instead of real resolution')
 parser.add_argument('--size', type=int, default=4, help='The name of the main folder')
+parser.add_argument('--savebatch', type=int, default=50, help='the number of save image batches')
 
 opt = parser.parse_args()
 print(opt)
@@ -66,8 +67,7 @@ torch.manual_seed(manualSeed)
 torch.cuda.manual_seed(manualSeed)
 torch.cuda.manual_seed_all(manualSeed)  # if use multi-GPU
 
-'''cudnn.deterministic = True
-cudnn.benchmark = False'''
+
 np.random.seed(manualSeed)
 
 print("Check the Current Random Torch.Seed: ", torch.seed(), "...")
@@ -80,7 +80,12 @@ MAX_RES = opt.size # for 32x32 output - 3 / 64x64 output - 4 / 128x128 output - 
 image_size  = 2**(2+MAX_RES)
 
 
-
+saveGroup = opt.saveGroup
+countnum = []
+for i in saveGroup:
+    i = i / opt.savebatch
+    countnum.append(int(i))
+print(countnum)
 
 from torchvision import datasets
 
@@ -105,14 +110,11 @@ dataset = datasets.ImageFolder(root = opt.data,
 # creating output folders
 if not os.path.exists(os.path.join(opt.outd)):
     os.makedirs(os.path.join(opt.outd))
-for f in [opt.outf, opt.outl, opt.outm, 'MMD_Loss']:
+for f in [opt.outf, opt.outl, opt.outm, 'MMD_Loss', 'G_D_Loss']:
     if not os.path.exists(os.path.join(opt.outd, f)):
         os.makedirs(os.path.join(opt.outd, f))
-for i in opt.saveImageGroup:
-    if not os.path.exists(os.path.join(opt.outd, opt.outf, str(i))):
-        os.makedirs(os.path.join(opt.outd,opt.outf, str(i)))
-        os.makedirs(os.path.join(opt.outd,opt.outf,str(i), 'Normalized-[-1,1]'))
-        os.makedirs(os.path.join(opt.outd,opt.outf,str(i), 'Normalized-[0,1]'))
+
+
 
 # Model creation and init
 G = Generator(max_res=MAX_RES, nch=opt.nch, nc=1, bn=opt.BN, ws=opt.WS, pn=opt.PN).to(DEVICE)
@@ -152,13 +154,16 @@ data_loader = DataLoader(dataset,
 dataarr=[]
 checkingLoss_D = []
 checkingLoss_G = []
+
+import time
+start = time.time()
 while True:
     t0 = time()
 
     lossEpochG = []
     lossEpochD = []
     lossEpochD_W = []
-
+    mmditer = []
     G.train()
     cudnn.benchmark = True
 
@@ -230,7 +235,7 @@ while True:
         # no need to compute D_real as it does not affect G
         g_loss = -G_fakem
 
-        # Optimize
+        # Optimizer
         g_loss.backward()
         optimizerG.step()
 
@@ -241,7 +246,7 @@ while True:
         fakearr = fake_images
         mmd = mmd_loss(fakearr, dataarr)
         mmdL.append(mmd.item())
-
+        mmditer.append(mmd.item())
         # update Gs with exponential moving average
         exp_mov_avg(Gs, G, alpha=0.999, global_step=global_step)
 
@@ -259,7 +264,7 @@ while True:
                      done=f'Epoch [{epoch:>3d}]  d_loss: {np.mean(lossEpochD):.4f}'
                           f', d_loss_W: {np.mean(lossEpochD_W):.3f}'
                           f', progress: {P.p:.2f}, time: {time() - t0:.2f}s'
-                            f', Mean MMD_Loss: {np.mean(mmd.item())}'
+                            f', Mean MMD_Loss: {np.mean(mmditer.item())}'
                      )
 
     d_losses = np.append(d_losses, lossEpochD)
@@ -280,7 +285,7 @@ while True:
     plt.xlabel("iterations")
     plt.ylabel("Loss")
     plt.legend()
-    plt.savefig(os.path.join(opt.outd, opt.outl, f'Gen Dis Loss Epoch_{epoch}.png'), dpi=200, bbox_inches='tight')
+    plt.savefig(os.path.join(opt.outd, 'G_D_Loss', f'Gen Dis Loss Epoch_{epoch}.png'), dpi=200, bbox_inches='tight')
     plt.clf()
 
     if not (epoch + 1) % opt.saveimages:
@@ -291,7 +296,7 @@ while True:
         ax.set_xlabel('epoch')
         ax.set_ylabel('Loss')
         ax.set_title(f'Progress: {P.p:.2f}')
-        plt.savefig(os.path.join( opt.outd, opt.outl, f'Discriminator Epoch_{epoch}.png'), dpi=200, bbox_inches='tight')
+        plt.savefig(os.path.join( opt.outd, 'D_Loss', f'Discriminator Epoch_{epoch}.png'), dpi=200, bbox_inches='tight')
         plt.clf()
 
         plt.figure(figsize=(10, 5))
@@ -314,36 +319,47 @@ while True:
         save_image(fake_images,
                    os.path.join( opt.outd, opt.outf, f'fake_images-{epoch:04d}-p{P.p:.2f}.png'),
                     nrow=8, pad_value=0,
-                   normalize=False, range=(-1, 1))
+                   normalize=False, value_range=(-1, 1))
         save_image(fake_images,
                    os.path.join(opt.outd, opt.outf, f'fake_images-Normalize-{epoch:04d}-p{P.p:.2f}.png'),
                    nrow=8, pad_value=0,
-                   normalize=True, range=(-1, 1))
+                   normalize=True, value_range=(-1, 1))
 
 
     if P.p >= P.pmax and not epoch % opt.savemodel:
-        torch.save(G, os.path.join( opt.outd, opt.outm, f'G_nch-{opt.nch}_epoch-{epoch}.pth'))
-        torch.save(D, os.path.join( opt.outd, opt.outm, f'D_nch-{opt.nch}_epoch-{epoch}.pth'))
-        torch.save(Gs, os.path.join( opt.outd, opt.outm, f'Gs_nch-{opt.nch}_epoch-{epoch}.pth'))
+        torch.save(G.state_dict(), os.path.join( opt.outd, opt.outm, f'G_nch-{opt.nch}_epoch-{epoch}.pth'))
+        torch.save(D.state_dict(), os.path.join( opt.outd, opt.outm, f'D_nch-{opt.nch}_epoch-{epoch}.pth'))
+        torch.save(Gs.state_dict(), os.path.join( opt.outd, opt.outm, f'Gs_nch-{opt.nch}_epoch-{epoch}.pth'))
 
-    if (epoch > 100 and (epoch-100) % 20 == 0) or epoch == opt.checkVal:
+    if (epoch <= 100 and epoch % 50 == 0) or (epoch > 100 and (epoch-100) % 20 == 0) or epoch == opt.checkVal:
         # 테스트  에폭마다 예시 이미지 생성
-        with torch.no_grad():
-            for num in opt.saveImageGroup:
-                z = hypersphere(torch.randn(64, opt.nch * 32, 1, 1, device=DEVICE))
-                fake_images = Gs(z, P.p)
-                for i, img in enumerate(fake_images):
-                    # Normalize [0, 1]
-                    save_image(img,
-                   os.path.join(opt.outd, opt.outf, str(num), 'Normalized-[0,1]', f'fake_images-{epoch:04d}-p{P.p:.2f}_{i}.png'),
-                   nrow=8, pad_value=0,
-                   normalize=True)
-                    # Normalize [-1, 1]
-                    save_image(img,
-                   os.path.join(opt.outd, opt.outf,str(num), 'Normalized-[-1,1]', f'fake_images-{epoch:04d}-p{P.p:.2f}_{i}.png'),
-                   nrow=8, pad_value=0,
-                   normalize=False, range=(-1, 1))
+
+        if not os.path.exists(os.path.join(opt.outd, opt.outf, str(epoch))):
+            os.makedirs(os.path.join(opt.outd, opt.outf, str(epoch), str(saveGroup[0]), 'normalized[-1,1]'))
+            os.makedirs(os.path.join(opt.outd, opt.outf, str(epoch), str(saveGroup[0]), 'normalized[0,1]'))
+            os.makedirs(os.path.join(opt.outd, opt.outf, str(epoch), str(saveGroup[1]), 'normalized[-1,1]'))
+            os.makedirs(os.path.join(opt.outd, opt.outf, str(epoch), str(saveGroup[1]), 'normalized[0,1]'))
+
+        for count in countnum:
+            saveNumber = count * opt.savebatch
+            for i in range(count):
+                with torch.no_grad():
+                        z = hypersphere(torch.randn(opt.savebatch, opt.nch * 32, 1, 1, device=DEVICE))
+                        fake = Gs(z, P.p).detach().cpu()
+                        for num in range(len(fake_images)):
+                            fake_img = fake[num]
+                            # Normalize [0, 1]
+                            save_image(fake_img,
+                           os.path.join(opt.outd, opt.outf, str(epoch),str(saveNumber), 'Normalized-[0,1]', f'fake_images-{epoch:04d}-p{P.p:.2f}_{i}_{num}.png'),
+                           normalize=True)
+                            # Normalize [-1, 1]
+                            save_image(fake_img,
+                           os.path.join(opt.outd, opt.outf,str(epoch), str(saveNumber), 'Normalized-[-1,1]', f'fake_images-{epoch:04d}-p{P.p:.2f}_{i}_{num}.png'),
+                           normalize=False, range=(-1, 1))
         print(f'Success the Saving Images! The number of ')
 
     epoch += 1
+
+    if epoch == 201:
+        print("time: ", time.time() - start)    # 현재 시각 - 시작시간 = 실행시간
 
