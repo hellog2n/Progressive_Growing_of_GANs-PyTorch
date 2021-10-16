@@ -333,12 +333,15 @@ while True:
 
     if (epoch <= 100 and epoch % 50 == 0 and epoch != 0) or (epoch > 100 and (epoch-100) % 20 == 0) or epoch == opt.checkVal:
         # 테스트  에폭마다 예시 이미지 생성
+        print("Check the Current Random Torch.Seed: ", torch.seed(), "...")
+        print("Check the Current Random Torch.initial_Seed: ", torch.initial_seed(), "...")
+        print("Check the Current Random Cuda.Seed: ", torch.cuda.initial_seed(), "...")
 
         if not os.path.exists(os.path.join(opt.outd, opt.outf, str(epoch))):
-            os.makedirs(os.path.join(opt.outd, opt.outf, str(epoch), str(saveGroup[0]), 'normalized[-1,1]'))
-            os.makedirs(os.path.join(opt.outd, opt.outf, str(epoch), str(saveGroup[0]), 'normalized[0,1]'))
-            os.makedirs(os.path.join(opt.outd, opt.outf, str(epoch), str(saveGroup[1]), 'normalized[-1,1]'))
-            os.makedirs(os.path.join(opt.outd, opt.outf, str(epoch), str(saveGroup[1]), 'normalized[0,1]'))
+            os.makedirs(os.path.join(opt.outd, opt.outf, str(epoch), str(saveGroup[0]), 'normalized-[-1,1]'))
+            os.makedirs(os.path.join(opt.outd, opt.outf, str(epoch), str(saveGroup[0]), 'normalized-[0,1]'))
+            os.makedirs(os.path.join(opt.outd, opt.outf, str(epoch), str(saveGroup[1]), 'normalized-[-1,1]'))
+            os.makedirs(os.path.join(opt.outd, opt.outf, str(epoch), str(saveGroup[1]), 'normalized-[0,1]'))
 
         for count in countnum:
             saveNumber = count * opt.savebatch
