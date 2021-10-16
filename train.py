@@ -331,7 +331,7 @@ while True:
         torch.save(D.state_dict(), os.path.join( opt.outd, opt.outm, f'D_nch-{opt.nch}_epoch-{epoch}.pth'))
         torch.save(Gs.state_dict(), os.path.join( opt.outd, opt.outm, f'Gs_nch-{opt.nch}_epoch-{epoch}.pth'))
 
-    if (epoch <= 100 and epoch % 50 == 0) or (epoch > 100 and (epoch-100) % 20 == 0) or epoch == opt.checkVal:
+    if (epoch <= 100 and epoch % 50 == 0 and epoch != 0) or (epoch > 100 and (epoch-100) % 20 == 0) or epoch == opt.checkVal:
         # 테스트  에폭마다 예시 이미지 생성
 
         if not os.path.exists(os.path.join(opt.outd, opt.outf, str(epoch))):
@@ -350,11 +350,11 @@ while True:
                             fake_img = fake[num]
                             # Normalize [0, 1]
                             save_image(fake_img,
-                           os.path.join(opt.outd, opt.outf, str(epoch),str(saveNumber), 'Normalized-[0,1]', f'fake_images-{epoch:04d}-p{P.p:.2f}_{i}_{num}.png'),
+                           os.path.join(opt.outd, opt.outf, str(epoch),str(saveNumber), 'normalized-[0,1]', f'fake_images-{epoch:04d}-p{P.p:.2f}_{i}_{num}.png'),
                            normalize=True)
                             # Normalize [-1, 1]
                             save_image(fake_img,
-                           os.path.join(opt.outd, opt.outf,str(epoch), str(saveNumber), 'Normalized-[-1,1]', f'fake_images-{epoch:04d}-p{P.p:.2f}_{i}_{num}.png'),
+                           os.path.join(opt.outd, opt.outf,str(epoch), str(saveNumber), 'normalized-[-1,1]', f'fake_images-{epoch:04d}-p{P.p:.2f}_{i}_{num}.png'),
                            normalize=False, range=(-1, 1))
         print(f'Success the Saving Images! The number of ')
 
